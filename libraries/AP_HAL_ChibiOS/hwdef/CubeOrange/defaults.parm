@@ -1,3 +1,4 @@
+
 # setup correct defaults for battery monitoring for cube power brick
 BATT2_CURR_PIN 4
 BATT2_VOLT_PIN 13
@@ -9,3 +10,9 @@ BATT2_VOLT_MULT 12.02
 ADSB_TYPE 1
 SERIAL5_BAUD 57
 SERIAL5_PROTOCOL 1
+# setup can esc
+CAN_D1_UC_NODE=10
+CAN_D1_UC_ESC_BM=1
+#safety switch disable
+BRD_SAFETYENABLE=0
+BRD_SAFETY_MASK=255
