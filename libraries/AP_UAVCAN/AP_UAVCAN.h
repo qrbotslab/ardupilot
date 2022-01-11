@@ -54,6 +54,7 @@
 #define AP_UAVCAN_MAX_LED_DEVICES 4
 
 // fwd-declare callback classes
+class TempCb;
 class ButtonCb;
 class TrafficReportCb;
 class ActuatorStatusCb;
@@ -230,7 +231,8 @@ private:
 
     ///// LED /////
     void led_out_send();
-
+    ///// Temp ////
+    void temp_out_send();
     // buzzer
     void buzzer_send();
 
@@ -332,6 +334,7 @@ private:
     uint32_t _last_notify_state_ms;
 
     // incoming button handling
+    static void handle_temp(AP_UAVCAN* ap_uavcan, uint8_t node_id, const TempCb &cb);
     static void handle_button(AP_UAVCAN* ap_uavcan, uint8_t node_id, const ButtonCb &cb);
     static void handle_traffic_report(AP_UAVCAN* ap_uavcan, uint8_t node_id, const TrafficReportCb &cb);
     static void handle_actuator_status(AP_UAVCAN* ap_uavcan, uint8_t node_id, const ActuatorStatusCb &cb);

@@ -1,0 +1,6 @@
+# setup can esc
+CAN_D1_UC_NODE=10
+CAN_D1_UC_ESC_BM=1
+#safety switch disable
+BRD_SAFETYENABLE=0
+BRD_SAFETY_MASK=255

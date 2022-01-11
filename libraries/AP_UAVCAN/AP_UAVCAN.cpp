@@ -30,7 +30,7 @@
 #include <uavcan/equipment/actuator/ArrayCommand.hpp>
 #include <uavcan/equipment/actuator/Command.hpp>
 #include <uavcan/equipment/actuator/Status.hpp>
-
+#include <uavcan/equipment/device/Temperature.hpp>
 #include <uavcan/equipment/esc/RawCommand.hpp>
 #include <uavcan/equipment/esc/Status.hpp>
 #include <uavcan/equipment/indication/LightsCommand.hpp>
@@ -44,7 +44,7 @@
 #include <ardupilot/equipment/trafficmonitor/TrafficReport.hpp>
 #include <uavcan/equipment/gnss/RTCMStream.hpp>
 #include <uavcan/protocol/debug/LogMessage.hpp>
-
+#include <uavcan/equipment/device/Temperature.hpp>
 #include <AP_Arming/AP_Arming.h>
 #include <AP_Baro/AP_Baro_UAVCAN.h>
 #include <AP_RangeFinder/AP_RangeFinder_UAVCAN.h>
@@ -131,7 +131,8 @@ static uavcan::Publisher<ardupilot::indication::SafetyState>* safety_state[HAL_M
 static uavcan::Publisher<uavcan::equipment::safety::ArmingStatus>* arming_status[HAL_MAX_CAN_PROTOCOL_DRIVERS];
 static uavcan::Publisher<uavcan::equipment::gnss::RTCMStream>* rtcm_stream[HAL_MAX_CAN_PROTOCOL_DRIVERS];
 static uavcan::Publisher<ardupilot::indication::NotifyState>* notify_state[HAL_MAX_CAN_PROTOCOL_DRIVERS];
-
+//custom publisher
+static uavcan::Publisher<uavcan::equipment::device::Temperature>* temp_sensor[HAL_MAX_CAN_PROTOCOL_DRIVERS];
 // Clients
 UC_CLIENT_CALL_REGISTRY_BINDER(ParamGetSetCb, uavcan::protocol::param::GetSet);
 static uavcan::ServiceClient<uavcan::protocol::param::GetSet, ParamGetSetCb>* param_get_set_client[HAL_MAX_CAN_PROTOCOL_DRIVERS];
@@ -143,6 +144,10 @@ static uavcan::protocol::param::ExecuteOpcode::Request param_save_req[HAL_MAX_CA
 
 
 // subscribers
+
+// handler temp
+UC_REGISTRY_BINDER(TempCb,uavcan::equipment::device::Temperature);
+static uavcan::Subscriber<uavcan::equipment::device::Temperature, TempCb> *temp_listener[HAL_MAX_CAN_PROTOCOL_DRIVERS];
 
 // handler SafteyButton
 UC_REGISTRY_BINDER(ButtonCb, ardupilot::indication::Button);
@@ -326,11 +331,21 @@ void AP_UAVCAN::init(uint8_t driver_index, bool enable_filters)
     notify_state[driver_index] = new uavcan::Publisher<ardupilot::indication::NotifyState>(*_node);
     notify_state[driver_index]->setTxTimeout(uavcan::MonotonicDuration::fromMSec(20));
     notify_state[driver_index]->setPriority(uavcan::TransferPriority::OneHigherThanLowest);
+    //custom publisher
+    temp_sensor[driver_index] = new uavcan::Publisher<uavcan::equipment::device::Temperature>(*_node);
+    temp_sensor[driver_index]->setTxTimeout(uavcan::MonotonicDuration::fromMSec(20));
+    temp_sensor[driver_index]->setPriority(uavcan::TransferPriority::OneHigherThanLowest);
+
 
     param_get_set_client[driver_index] = new uavcan::ServiceClient<uavcan::protocol::param::GetSet, ParamGetSetCb>(*_node, ParamGetSetCb(this, &AP_UAVCAN::handle_param_get_set_response));
 
     param_execute_opcode_client[driver_index] = new uavcan::ServiceClient<uavcan::protocol::param::ExecuteOpcode, ParamExecuteOpcodeCb>(*_node, ParamExecuteOpcodeCb(this, &AP_UAVCAN::handle_param_save_response));
 
+    temp_listener[driver_index] = new uavcan::Subscriber<uavcan::equipment::device::Temperature,TempCb>(*_node);
+    if(temp_listener[driver_index]){
+        temp_listener[driver_index]->start(TempCb(this,&handle_temp));
+    }
+    
     safety_button_listener[driver_index] = new uavcan::Subscriber<ardupilot::indication::Button, ButtonCb>(*_node);
     if (safety_button_listener[driver_index]) {
         safety_button_listener[driver_index]->start(ButtonCb(this, &handle_button));
@@ -386,6 +401,7 @@ void AP_UAVCAN::init(uint8_t driver_index, bool enable_filters)
 void AP_UAVCAN::loop(void)
 {
     while (true) {
+        //printf("inside UAVCAN Loop ...............................\n\r");
         if (!_initialized) {
             hal.scheduler->delay_microseconds(1000);
             continue;
@@ -426,6 +442,7 @@ void AP_UAVCAN::loop(void)
         }
 
         led_out_send();
+        //temp_out_send();
         buzzer_send();
         rtcm_stream_send();
         safety_state_send();
@@ -547,7 +564,15 @@ void AP_UAVCAN::SRV_push_servos()
 
     _SRV_armed = hal.util->safety_switch_state() != AP_HAL::Util::SAFETY_DISARMED;
 }
-
+/////Temp /////
+void AP_UAVCAN::temp_out_send()
+{
+    uavcan::equipment::device::Temperature temp_msg;
+    temp_msg.device_id=225;
+    temp_msg.v1=25.6;
+    temp_msg.error_flags=0;
+    temp_sensor[_driver_index]->broadcast(temp_msg);
+}
 
 ///// LED /////
 
@@ -808,6 +833,18 @@ void AP_UAVCAN::send_RTCMStream(const uint8_t *data, uint32_t len)
     }
     _rtcm_stream.buf->write(data, len);
 }
+
+/*
+ handle Temp message
+*/
+
+void AP_UAVCAN::handle_temp(AP_UAVCAN* ap_uavcan, uint8_t node_id, const TempCb &cb){
+    printf("v1:%f,v2:%f,v3:%f,v4:%f,v5:%f\n\r",cb.msg->v1,cb.msg->v2,cb.msg->v3,cb.msg->v4,cb.msg->v5);
+    printf("v6:%f,v7:%f,v8:%f,v9:%f,v10:%f\n\r",cb.msg->v6,cb.msg->v7,cb.msg->v8,cb.msg->v9,cb.msg->v10);
+    printf("v11:%f,v12:%f,v13:%f,v14:%f,v15:%f\n\r",cb.msg->v11,cb.msg->v12,cb.msg->v13,cb.msg->v14,cb.msg->v15);
+    printf("v16:%f,v17:%f,v18:%f,v19:%f,v20:%f\n\r",cb.msg->v16,cb.msg->v17,cb.msg->v18,cb.msg->v19,cb.msg->v20);
+}
+
 
 /*
   handle Button message
